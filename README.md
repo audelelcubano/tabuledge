@@ -77,16 +77,3 @@ npm start
 
 This will launch the dev server at http://localhost:3000/.
 
-📌 Next Steps (Upcoming Sprints)
-
-Role-based redirect after login (admin → /admin, manager → /manager, accountant → /accountant)
-
-Let admin assign/change roles when approving requests
-
-Admin: suspend users for date ranges
-
-Admin: report of expired passwords
-
-Admin: send emails directly from system (via SMTP.js / Elastic Email)
-
-Display logged-in user’s name + profile picture top-right
