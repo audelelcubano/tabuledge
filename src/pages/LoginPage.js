@@ -14,20 +14,20 @@ function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      // Check user document in Firestore
+      // Look up user document in Firestore (users collection keyed by email)
       const userDocRef = doc(db, "users", email);
       const snap = await getDoc(userDocRef);
 
       if (snap.exists()) {
         const data = snap.data();
 
-        // Check if account is locked
+        // Account lock check
         if (data.failedAttempts >= 3) {
           alert("❌ Account locked. Contact admin.");
           return;
         }
 
-        // Check password expiration (90 days, warn at 3 days left)
+        // Password expiration check (90 days, warn at 3 days)
         const ninetyDays = 90 * 24 * 60 * 60 * 1000;
         if (data.passwordSetAt) {
           const age = Date.now() - data.passwordSetAt;
@@ -40,16 +40,32 @@ function LoginPage() {
         }
       }
 
-      // Attempt login with Firebase Auth
+      // Firebase login attempt
       await signInWithEmailAndPassword(auth, email, password);
 
-      // Reset failed attempts on success
+      // Reset failed attempts
       if (snap.exists()) {
         await updateDoc(userDocRef, { failedAttempts: 0 });
       }
 
       alert("✅ Login successful!");
-      // TODO: redirect based on role
+
+      // Redirect based on role
+      if (snap.exists()) {
+        const role = snap.data().role;
+        if (role === "admin") {
+          navigate("/admin");
+        } else if (role === "manager") {
+          navigate("/manager");
+        } else if (role === "accountant") {
+          navigate("/accountant");
+        } else {
+          navigate("/"); // fallback
+        }
+      } else {
+        navigate("/"); // fallback if no Firestore record
+      }
+
     } catch (err) {
       setError(err.message);
 
@@ -113,3 +129,4 @@ function LoginPage() {
 }
 
 export default LoginPage;
+
