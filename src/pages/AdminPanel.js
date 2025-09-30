@@ -13,6 +13,7 @@ import { db } from "../firebase";
 function AdminPanel() {
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
+  const [suspendDates, setSuspendDates] = useState({}); // track suspend inputs
 
   // Fetch account requests + users
   useEffect(() => {
@@ -33,20 +34,18 @@ function AdminPanel() {
     await addDoc(collection(db, "users"), {
       ...req,
       username,
-      role: "accountant", // default role, can be changed later
+      role: "accountant",
       active: true,
       failedAttempts: 0,
       passwordSetAt: Date.now(),
     });
 
-    // Remove from requests
     await deleteDoc(doc(db, "userRequests", req.id));
-
     setRequests(requests.filter((r) => r.id !== req.id));
     alert(`✅ Approved user: ${username}`);
   };
 
-  // Reject request → mark as rejected
+  // Reject request
   const rejectRequest = async (id) => {
     await updateDoc(doc(db, "userRequests", id), { status: "rejected" });
     setRequests(requests.filter((r) => r.id !== id));
@@ -60,12 +59,38 @@ function AdminPanel() {
     setUsers(users.map((u) => (u.id === id ? { ...u, active: !currentStatus } : u)));
   };
 
-  // Generate username format: first initial + last name + MMYY
+  // Suspend user with start/end dates
+  const suspendUser = async (id) => {
+    const { start, end } = suspendDates[id] || {};
+    if (!start || !end) {
+      alert("Please select start and end dates.");
+      return;
+    }
+
+    const ref = doc(db, "users", id);
+    await updateDoc(ref, { suspendedFrom: start, suspendedTo: end, active: false });
+    setUsers(users.map((u) => (u.id === id ? { ...u, suspendedFrom: start, suspendedTo: end, active: false } : u)));
+    alert("⏸ User suspended");
+  };
+
+  // Generate username: first initial + last name + MMYY
   const generateUsername = (firstName, lastName) => {
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
     const yy = String(now.getFullYear()).slice(-2);
     return `${firstName[0].toLowerCase()}${lastName.toLowerCase()}${mm}${yy}`;
+  };
+
+  // Password expiration check (90 days)
+  const getExpiredUsers = () => {
+    const now = Date.now();
+    const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+    return users.filter((u) => u.passwordSetAt && now - u.passwordSetAt > ninetyDays);
+  };
+
+  // Simulate sending email
+  const sendEmail = (email) => {
+    alert(`📧 Simulated email sent to ${email}`);
   };
 
   return (
@@ -114,7 +139,8 @@ function AdminPanel() {
               <th>Email</th>
               <th>Role</th>
               <th>Status</th>
-              <th>Toggle Active</th>
+              <th>Suspend</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -125,14 +151,44 @@ function AdminPanel() {
                 <td>{u.role}</td>
                 <td>{u.active ? "Active" : "Inactive"}</td>
                 <td>
+                  <input
+                    type="date"
+                    onChange={(e) =>
+                      setSuspendDates({ ...suspendDates, [u.id]: { ...suspendDates[u.id], start: e.target.value } })
+                    }
+                  />
+                  <input
+                    type="date"
+                    onChange={(e) =>
+                      setSuspendDates({ ...suspendDates, [u.id]: { ...suspendDates[u.id], end: e.target.value } })
+                    }
+                  />
+                  <button onClick={() => suspendUser(u.id)}>Suspend</button>
+                </td>
+                <td>
                   <button onClick={() => toggleActive(u.id, u.active)}>
                     {u.active ? "Deactivate" : "Activate"}
                   </button>
+                  <button onClick={() => sendEmail(u.email)}>Send Email</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* Expired Password Report */}
+      <h3>⚠️ Expired Passwords</h3>
+      {getExpiredUsers().length === 0 ? (
+        <p>No expired passwords</p>
+      ) : (
+        <ul>
+          {getExpiredUsers().map((u) => (
+            <li key={u.id}>
+              {u.username} ({u.email}) → expired
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
