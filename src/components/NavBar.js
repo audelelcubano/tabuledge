@@ -2,9 +2,22 @@
 import React from "react";
 import logo from "../logo.svg";
 import { useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { auth } from "../firebase";
 
 function NavBar({ userEmail, onDateChange, selectedDate }) {
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      alert("You have been logged out.");
+      navigate("/");
+    } catch (e) {
+      console.error("Logout failed:", e);
+      alert("Logout failed. Please try again.");
+    }
+  };
 
   return (
     <header style={styles.header}>
@@ -28,6 +41,11 @@ function NavBar({ userEmail, onDateChange, selectedDate }) {
         <button onClick={() => navigate("/accountant")} title="Journalizing & posting" style={styles.btn}>Journal</button>
         <button onClick={() => navigate("/manager")} title="Reports & approvals" style={styles.btn}>Reports</button>
         <button onClick={() => navigate("/event-logs")} title="System change history" style={styles.btn}>Event Logs</button>
+
+        {/* Logout */}
+        <button onClick={handleLogout} title="Sign out of Tabuledge" style={{ ...styles.btn, background: "#7f1d1d", borderColor: "#7f1d1d" }}>
+          Logout
+        </button>
       </nav>
     </header>
   );
@@ -49,7 +67,7 @@ const styles = {
   logo: { width: 40, height: 40 },
   meta: { display: "flex", alignItems: "center", gap: 8 },
   date: { padding: "4px 8px", borderRadius: 6, border: "1px solid #334155" },
-  nav: { display: "flex", gap: 8 },
+  nav: { display: "flex", gap: 8, alignItems: "center" },
   btn: {
     padding: "8px 12px",
     background: "#1e293b",
