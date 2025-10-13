@@ -29,7 +29,8 @@ function AdminPanel() {
 
   // Approve request → move to users collection
   const approveRequest = async (req) => {
-    const username = req.username || generateUsername(req.firstName, req.lastName);
+    const username =
+      req.username || generateUsername(req.firstName, req.lastName);
 
     await addDoc(collection(db, "users"), {
       ...req,
@@ -95,7 +96,14 @@ function AdminPanel() {
 
   return (
     <div style={{ margin: "20px" }}>
-      <h2>👑 Admin Panel</h2>
+      {/* QUICK LINKS HEADER */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2>👑 Admin Panel</h2>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => window.location.assign("/accounts")} title="Open Chart of Accounts">Chart of Accounts</button>
+          <button onClick={() => window.location.assign("/event-logs")} title="Open Event Logs">Event Logs</button>
+        </div>
+      </div>
 
       {/* Pending Requests */}
       <h3>Pending Requests</h3>
