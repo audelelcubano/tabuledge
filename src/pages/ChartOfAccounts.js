@@ -24,7 +24,9 @@ function ChartOfAccounts() {
   const canManage = role === "admin";
   const fallbackEmail = auth?.currentUser?.email || "admin@example.com";
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [helpOpen, setHelpOpen] = useState(false);
 
   const [accounts, setAccounts] = useState([]);
@@ -34,11 +36,10 @@ function ChartOfAccounts() {
   // Show/hide the add/edit form (admins only)
   const [showForm, setShowForm] = useState(false);
   useEffect(() => {
-    // Auto-open the form only for admins when the role finishes loading
     if (!roleLoading) setShowForm(canManage);
   }, [roleLoading, canManage]);
 
-  // Filters
+  // Active filter values (applied when user clicks button / presses Enter)
   const [filters, setFilters] = useState({
     name: "",
     number: "",
@@ -49,7 +50,18 @@ function ChartOfAccounts() {
     activeOnly: true,
   });
 
-  // Add/Edit form state
+  // Draft values while the user is typing
+  const [filterDraft, setFilterDraft] = useState({
+    name: "",
+    number: "",
+    category: "",
+    subcategory: "",
+    minAmount: "",
+    maxAmount: "",
+    activeOnly: true,
+  });
+
+  // Add/Edit form state (admins)
   const emptyForm = {
     name: "",
     number: "",
@@ -77,7 +89,7 @@ function ChartOfAccounts() {
     load();
   }, []);
 
-  // Apply filters
+  // Apply filters to data
   const filtered = useMemo(() => {
     return accounts
       .filter((a) => {
@@ -85,7 +97,11 @@ function ChartOfAccounts() {
         if (filters.name && !a.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
         if (filters.number && !String(a.number).startsWith(filters.number)) return false;
         if (filters.category && a.category !== filters.category) return false;
-        if (filters.subcategory && !String(a.subcategory).toLowerCase().includes(filters.subcategory.toLowerCase())) return false;
+        if (
+          filters.subcategory &&
+          !String(a.subcategory).toLowerCase().includes(filters.subcategory.toLowerCase())
+        )
+          return false;
         const amt = Number(a.balance || 0);
         if (filters.minAmount && amt < parseMoney(filters.minAmount)) return false;
         if (filters.maxAmount && amt > parseMoney(filters.maxAmount)) return false;
@@ -119,7 +135,9 @@ function ChartOfAccounts() {
     const initBal = parseMoney(raw.initialBalance);
     const debit = parseMoney(raw.debit);
     const credit = parseMoney(raw.credit);
-    const balance = parseMoney(raw.balance !== undefined ? raw.balance : initBal + debit - credit);
+    const balance = parseMoney(
+      raw.balance !== undefined ? raw.balance : initBal + debit - credit
+    );
 
     return {
       name: raw.name.trim(),
@@ -419,28 +437,36 @@ function ChartOfAccounts() {
           </form>
         )}
 
-        {/* Filters */}
-        <section style={styles.filters}>
+        {/* Filters (manual apply with button or Enter) */}
+        <section
+          style={styles.filters}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              setFilters(filterDraft);
+            }
+          }}
+        >
           <input
             placeholder="Filter by name"
-            value={filters.name}
-            onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+            value={filterDraft.name}
+            onChange={(e) => setFilterDraft({ ...filterDraft, name: e.target.value })}
             title="Filter by account name"
           />
           <input
             placeholder="Filter by number"
-            value={filters.number}
+            value={filterDraft.number}
             onChange={(e) =>
-              setFilters({
-                ...filters,
+              setFilterDraft({
+                ...filterDraft,
                 number: e.target.value.replace(/[^\d]/g, ""),
               })
             }
             title="Filter by account number"
           />
           <select
-            value={filters.category}
-            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+            value={filterDraft.category}
+            onChange={(e) => setFilterDraft({ ...filterDraft, category: e.target.value })}
             title="Filter by category"
           >
             <option value="">All Categories</option>
@@ -452,18 +478,18 @@ function ChartOfAccounts() {
           </select>
           <input
             placeholder="Filter by subcategory"
-            value={filters.subcategory}
+            value={filterDraft.subcategory}
             onChange={(e) =>
-              setFilters({ ...filters, subcategory: e.target.value })
+              setFilterDraft({ ...filterDraft, subcategory: e.target.value })
             }
             title="Filter by subcategory"
           />
           <input
             placeholder="Min balance"
-            value={filters.minAmount}
+            value={filterDraft.minAmount}
             onChange={(e) =>
-              setFilters({
-                ...filters,
+              setFilterDraft({
+                ...filterDraft,
                 minAmount: e.target.value.replace(/[^\d.,-]/g, ""),
               })
             }
@@ -471,25 +497,37 @@ function ChartOfAccounts() {
           />
           <input
             placeholder="Max balance"
-            value={filters.maxAmount}
+            value={filterDraft.maxAmount}
             onChange={(e) =>
-              setFilters({
-                ...filters,
+              setFilterDraft({
+                ...filterDraft,
                 maxAmount: e.target.value.replace(/[^\d.,-]/g, ""),
               })
             }
             title="Filter by maximum balance"
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Show only active accounts">
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+            title="Show only active accounts"
+          >
             <input
               type="checkbox"
-              checked={filters.activeOnly}
+              checked={filterDraft.activeOnly}
               onChange={(e) =>
-                setFilters({ ...filters, activeOnly: e.target.checked })
+                setFilterDraft({ ...filterDraft, activeOnly: e.target.checked })
               }
             />
             Active only
           </label>
+
+          {/* Filter action button */}
+          <button
+            onClick={() => setFilters(filterDraft)}
+            style={styles.applyBtn}
+            title="Apply filter search"
+          >
+            Apply Filters
+          </button>
         </section>
 
         {/* Table */}
@@ -518,7 +556,11 @@ function ChartOfAccounts() {
                   <tr key={acc.id} style={{ opacity: acc.active === false ? 0.5 : 1 }}>
                     <td style={styles.td}>{acc.order}</td>
                     <td style={styles.td}>
-                      <button onClick={() => goLedger(acc)} style={styles.linkBtn} title="Open ledger for this account">
+                      <button
+                        onClick={() => goLedger(acc)}
+                        style={styles.linkBtn}
+                        title="Open ledger for this account"
+                      >
                         {acc.name}
                       </button>
                     </td>
@@ -526,10 +568,11 @@ function ChartOfAccounts() {
                     <td style={styles.td}>{acc.category}</td>
                     <td style={styles.td}>{acc.subcategory}</td>
                     <td style={styles.td}>{acc.normalSide}</td>
-                    <td style={{ ...styles.td, textAlign: "right" }}>{formatMoney(acc.balance)}</td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>
+                      {formatMoney(acc.balance)}
+                    </td>
                     <td style={styles.td}>{acc.active === false ? "Inactive" : "Active"}</td>
                     <td style={styles.td}>
-                      {/* Actions dropdown */}
                       <select
                         defaultValue=""
                         onChange={(e) => {
@@ -585,6 +628,14 @@ const styles = {
     gap: 10,
   },
   filters: { display: "flex", flexWrap: "wrap", gap: 8, margin: "16px 0" },
+  applyBtn: {
+    padding: "8px 12px",
+    background: "#2563eb",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
   table: { width: "100%", borderCollapse: "collapse" },
   th: { border: "1px solid #e2e8f0", padding: 8, background: "#f1f5f9", textAlign: "left" },
   td: { border: "1px solid #e2e8f0", padding: 8, textAlign: "left" },
