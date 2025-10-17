@@ -21,11 +21,11 @@ import useUserRole from "../hooks/useUserRole";
 function ChartOfAccounts() {
   const navigate = useNavigate();
   const { role, loading: roleLoading, userEmail } = useUserRole();
-  const canManage = role === "admin"; // ⬅️ RBAC: only admins can add/edit/deactivate
+  const canManage = role === "admin";
   const fallbackEmail = auth?.currentUser?.email || "admin@example.com";
 
-  const [selectedDate, setSelectedDate] = useState(
-    () => new Date().toISOString().slice(0, 10)
+  const [selectedDate, setSelectedDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
   );
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -33,7 +33,13 @@ function ChartOfAccounts() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
 
-  // filters
+  // Show/hide the add/edit form (admins only)
+  const [showForm, setShowForm] = useState(false);
+  useEffect(() => {
+    if (!roleLoading) setShowForm(canManage);
+  }, [roleLoading, canManage]);
+
+  // Active filter values (applied when user clicks button / presses Enter)
   const [filters, setFilters] = useState({
     name: "",
     number: "",
@@ -44,7 +50,18 @@ function ChartOfAccounts() {
     activeOnly: true,
   });
 
-  // form state for add/edit (hidden for non-admin)
+  // Draft values while the user is typing
+  const [filterDraft, setFilterDraft] = useState({
+    name: "",
+    number: "",
+    category: "",
+    subcategory: "",
+    minAmount: "",
+    maxAmount: "",
+    activeOnly: true,
+  });
+
+  // Add/Edit form state (admins)
   const emptyForm = {
     name: "",
     number: "",
@@ -62,6 +79,7 @@ function ChartOfAccounts() {
   };
   const [form, setForm] = useState(emptyForm);
 
+  // Load accounts
   useEffect(() => {
     const load = async () => {
       const snap = await getDocs(collection(db, "accounts"));
@@ -71,6 +89,7 @@ function ChartOfAccounts() {
     load();
   }, []);
 
+  // Apply filters to data
   const filtered = useMemo(() => {
     return accounts
       .filter((a) => {
@@ -91,7 +110,7 @@ function ChartOfAccounts() {
       .sort((x, y) => String(x.order).localeCompare(String(y.order)));
   }, [accounts, filters]);
 
-  // --- helpers ---
+  // --- Validation & persistence helpers ---
   const ensureUnique = async (name, number, excludeId = null) => {
     const nameQ = query(collection(db, "accounts"), where("name", "==", name));
     const nameSnap = await getDocs(nameQ);
@@ -152,6 +171,7 @@ function ChartOfAccounts() {
     });
   };
 
+  // Create / Edit / Deactivate
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!canManage) return alert("View-only: your role cannot add accounts.");
@@ -172,6 +192,7 @@ function ChartOfAccounts() {
   const startEdit = (acc) => {
     if (!canManage) return alert("View-only: your role cannot edit accounts.");
     setEditingId(acc.id);
+    setShowForm(true);
     setForm({
       ...acc,
       initialBalance: formatMoney(acc.initialBalance),
@@ -198,6 +219,7 @@ function ChartOfAccounts() {
       setAccounts(accounts.map((a) => (a.id === editingId ? updated : a)));
       setEditingId(null);
       setForm(emptyForm);
+      setShowForm(true);
       alert("✅ Account updated");
     } catch (err) {
       alert(err.message);
@@ -217,12 +239,20 @@ function ChartOfAccounts() {
     setAccounts(accounts.map((a) => (a.id === acc.id ? { ...a, active: false } : a)));
   };
 
+  // Navigation
   const goLedger = (acc) => navigate(`/ledger/${acc.id}`);
+  const goDetails = (acc) => navigate(`/accounts/${acc.id}`);
 
-  // Show page only after we know the role (prevents flicker)
-  if (roleLoading) {
-    return <div style={{ padding: 20 }}>Loading…</div>;
-  }
+  // Row actions dropdown
+  const onRowAction = (acc, value) => {
+    if (!value) return;
+    if (value === "view") return goDetails(acc);
+    if (value === "edit") return startEdit(acc);
+    if (value === "deactivate") return deactivate(acc);
+  };
+
+  // Wait for role so the UI doesn't flicker
+  if (roleLoading) return <div style={{ padding: 20 }}>Loading…</div>;
 
   return (
     <div>
@@ -235,25 +265,35 @@ function ChartOfAccounts() {
       <main style={styles.container}>
         <h2 style={styles.h2}>Chart of Accounts</h2>
 
-        {/* Role banner */}
+        {/* View-only banner */}
         {!canManage && (
           <div style={styles.banner} title="You can view and search accounts only">
             View-only mode: your role (<strong>{role || "unknown"}</strong>) cannot add, edit, or deactivate accounts.
           </div>
         )}
 
+        {/* Top actions */}
         <div style={styles.actions}>
-          <button onClick={() => setHelpOpen(true)} title="Open help for this page">
+          {canManage && (
+            <button
+              onClick={() => {
+                setShowForm((v) => !v);
+                if (!showForm) window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              title={showForm ? "Hide form" : "Show form to add or edit accounts"}
+            >
+              {showForm ? "Hide Form" : "Add Account"}
+            </button>
+          )}
+          <button onClick={() => setHelpOpen(true)} title="Open help for this page" style={{ marginLeft: 8 }}>
             Help
           </button>
         </div>
 
         {/* Add / Edit form (admins only) */}
-        {canManage && (
+        {canManage && showForm && (
           <form
-            onSubmit={
-              editingId ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit
-            }
+            onSubmit={editingId ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit}
             style={styles.form}
           >
             <div style={styles.row}>
@@ -385,6 +425,7 @@ function ChartOfAccounts() {
                     onClick={() => {
                       setEditingId(null);
                       setForm(emptyForm);
+                      setShowForm(true);
                     }}
                     title="Cancel editing"
                   >
@@ -396,30 +437,36 @@ function ChartOfAccounts() {
           </form>
         )}
 
-        {/* Filters (all roles can use) */}
-        <section style={styles.filters}>
+        {/* Filters (manual apply with button or Enter) */}
+        <section
+          style={styles.filters}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              setFilters(filterDraft);
+            }
+          }}
+        >
           <input
             placeholder="Filter by name"
-            value={filters.name}
-            onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+            value={filterDraft.name}
+            onChange={(e) => setFilterDraft({ ...filterDraft, name: e.target.value })}
             title="Filter by account name"
           />
           <input
             placeholder="Filter by number"
-            value={filters.number}
+            value={filterDraft.number}
             onChange={(e) =>
-              setFilters({
-                ...filters,
+              setFilterDraft({
+                ...filterDraft,
                 number: e.target.value.replace(/[^\d]/g, ""),
               })
             }
             title="Filter by account number"
           />
           <select
-            value={filters.category}
-            onChange={(e) =>
-              setFilters({ ...filters, category: e.target.value })
-            }
+            value={filterDraft.category}
+            onChange={(e) => setFilterDraft({ ...filterDraft, category: e.target.value })}
             title="Filter by category"
           >
             <option value="">All Categories</option>
@@ -431,18 +478,18 @@ function ChartOfAccounts() {
           </select>
           <input
             placeholder="Filter by subcategory"
-            value={filters.subcategory}
+            value={filterDraft.subcategory}
             onChange={(e) =>
-              setFilters({ ...filters, subcategory: e.target.value })
+              setFilterDraft({ ...filterDraft, subcategory: e.target.value })
             }
             title="Filter by subcategory"
           />
           <input
             placeholder="Min balance"
-            value={filters.minAmount}
+            value={filterDraft.minAmount}
             onChange={(e) =>
-              setFilters({
-                ...filters,
+              setFilterDraft({
+                ...filterDraft,
                 minAmount: e.target.value.replace(/[^\d.,-]/g, ""),
               })
             }
@@ -450,10 +497,10 @@ function ChartOfAccounts() {
           />
           <input
             placeholder="Max balance"
-            value={filters.maxAmount}
+            value={filterDraft.maxAmount}
             onChange={(e) =>
-              setFilters({
-                ...filters,
+              setFilterDraft({
+                ...filterDraft,
                 maxAmount: e.target.value.replace(/[^\d.,-]/g, ""),
               })
             }
@@ -465,13 +512,22 @@ function ChartOfAccounts() {
           >
             <input
               type="checkbox"
-              checked={filters.activeOnly}
+              checked={filterDraft.activeOnly}
               onChange={(e) =>
-                setFilters({ ...filters, activeOnly: e.target.checked })
+                setFilterDraft({ ...filterDraft, activeOnly: e.target.checked })
               }
             />
             Active only
           </label>
+
+          {/* Filter action button */}
+          <button
+            onClick={() => setFilters(filterDraft)}
+            style={styles.applyBtn}
+            title="Apply filter search"
+          >
+            Apply Filters
+          </button>
         </section>
 
         {/* Table */}
@@ -479,34 +535,27 @@ function ChartOfAccounts() {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Name</th>
-                <th>Number</th>
-                <th>Category</th>
-                <th>Subcategory</th>
-                <th>Normal</th>
-                <th>Balance</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={styles.th}>Order</th>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Number</th>
+                <th style={styles.th}>Category</th>
+                <th style={styles.th}>Subcategory</th>
+                <th style={styles.th}>Normal</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Balance</th>
+                <th style={styles.th}>Status</th>
+                <th style={styles.th}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan="9">Loading…</td>
-                </tr>
+                <tr><td colSpan="9" style={{ textAlign: "left" }}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan="9">No accounts match your filters.</td>
-                </tr>
+                <tr><td colSpan="9" style={{ textAlign: "left" }}>No accounts match your filters.</td></tr>
               ) : (
                 filtered.map((acc) => (
-                  <tr
-                    key={acc.id}
-                    style={{ opacity: acc.active === false ? 0.5 : 1 }}
-                  >
-                    <td>{acc.order}</td>
-                    <td>
+                  <tr key={acc.id} style={{ opacity: acc.active === false ? 0.5 : 1 }}>
+                    <td style={styles.td}>{acc.order}</td>
+                    <td style={styles.td}>
                       <button
                         onClick={() => goLedger(acc)}
                         style={styles.linkBtn}
@@ -515,37 +564,29 @@ function ChartOfAccounts() {
                         {acc.name}
                       </button>
                     </td>
-                    <td>{acc.number}</td>
-                    <td>{acc.category}</td>
-                    <td>{acc.subcategory}</td>
-                    <td>{acc.normalSide}</td>
-                    <td style={{ textAlign: "right" }}>
+                    <td style={styles.td}>{acc.number}</td>
+                    <td style={styles.td}>{acc.category}</td>
+                    <td style={styles.td}>{acc.subcategory}</td>
+                    <td style={styles.td}>{acc.normalSide}</td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>
                       {formatMoney(acc.balance)}
                     </td>
-                    <td>{acc.active === false ? "Inactive" : "Active"}</td>
-                    <td>
-                      {/* For non-admins, show disabled buttons with tooltips */}
-                      {canManage ? (
-                        <>
-                          <button
-                            onClick={() => startEdit(acc)}
-                            title="Edit account"
-                          >
-                            Edit
-                          </button>{" "}
-                          <button
-                            onClick={() => deactivate(acc)}
-                            title="Deactivate account"
-                          >
-                            Deactivate
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button disabled title="Admins only">Edit</button>{" "}
-                          <button disabled title="Admins only">Deactivate</button>
-                        </>
-                      )}
+                    <td style={styles.td}>{acc.active === false ? "Inactive" : "Active"}</td>
+                    <td style={styles.td}>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          const action = e.target.value;
+                          e.target.value = "";
+                          onRowAction(acc, action);
+                        }}
+                        title={canManage ? "Choose an action" : "View-only"}
+                      >
+                        <option value="" disabled>▾ Actions</option>
+                        <option value="view">View</option>
+                        <option value="edit" disabled={!canManage}>Edit</option>
+                        <option value="deactivate" disabled={!canManage}>Deactivate</option>
+                      </select>
                     </td>
                   </tr>
                 ))
@@ -571,7 +612,7 @@ const styles = {
     borderRadius: 8,
     color: "#7c2d12",
   },
-  actions: { display: "flex", justifyContent: "flex-end" },
+  actions: { display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 },
   form: {
     display: "grid",
     gap: 12,
@@ -579,6 +620,7 @@ const styles = {
     padding: 16,
     borderRadius: 12,
     border: "1px solid #e2e8f0",
+    marginBottom: 12,
   },
   row: {
     display: "grid",
@@ -586,13 +628,24 @@ const styles = {
     gap: 10,
   },
   filters: { display: "flex", flexWrap: "wrap", gap: 8, margin: "16px 0" },
+  applyBtn: {
+    padding: "8px 12px",
+    background: "#2563eb",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
   table: { width: "100%", borderCollapse: "collapse" },
+  th: { border: "1px solid #e2e8f0", padding: 8, background: "#f1f5f9", textAlign: "left" },
+  td: { border: "1px solid #e2e8f0", padding: 8, textAlign: "left" },
   linkBtn: {
     background: "transparent",
     color: "#2563eb",
     border: "none",
     cursor: "pointer",
     textDecoration: "underline",
+    padding: 0,
   },
 };
 

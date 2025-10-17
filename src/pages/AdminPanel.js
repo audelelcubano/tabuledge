@@ -8,14 +8,18 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
+import NavBar from "../components/NavBar";
 
 function AdminPanel() {
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
-  const [suspendDates, setSuspendDates] = useState({}); // track suspend inputs
+  const [suspendDates, setSuspendDates] = useState({});
+  const userEmail = auth?.currentUser?.email || "admin@example.com";
+  const [selectedDate, setSelectedDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
 
-  // Fetch account requests + users
   useEffect(() => {
     const fetchData = async () => {
       const reqSnap = await getDocs(collection(db, "userRequests"));
@@ -27,10 +31,8 @@ function AdminPanel() {
     fetchData();
   }, []);
 
-  // Approve request → move to users collection
   const approveRequest = async (req) => {
-    const username =
-      req.username || generateUsername(req.firstName, req.lastName);
+    const username = req.username || generateUsername(req.firstName, req.lastName);
 
     await addDoc(collection(db, "users"), {
       ...req,
@@ -46,21 +48,18 @@ function AdminPanel() {
     alert(`✅ Approved user: ${username}`);
   };
 
-  // Reject request
   const rejectRequest = async (id) => {
     await updateDoc(doc(db, "userRequests", id), { status: "rejected" });
     setRequests(requests.filter((r) => r.id !== id));
     alert("❌ Request rejected");
   };
 
-  // Toggle user active/inactive
   const toggleActive = async (id, currentStatus) => {
     const ref = doc(db, "users", id);
     await updateDoc(ref, { active: !currentStatus });
     setUsers(users.map((u) => (u.id === id ? { ...u, active: !currentStatus } : u)));
   };
 
-  // Suspend user with start/end dates
   const suspendUser = async (id) => {
     const { start, end } = suspendDates[id] || {};
     if (!start || !end) {
@@ -74,7 +73,6 @@ function AdminPanel() {
     alert("⏸ User suspended");
   };
 
-  // Generate username: first initial + last name + MMYY
   const generateUsername = (firstName, lastName) => {
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -82,122 +80,123 @@ function AdminPanel() {
     return `${firstName[0].toLowerCase()}${lastName.toLowerCase()}${mm}${yy}`;
   };
 
-  // Password expiration check (90 days)
   const getExpiredUsers = () => {
     const now = Date.now();
     const ninetyDays = 90 * 24 * 60 * 60 * 1000;
     return users.filter((u) => u.passwordSetAt && now - u.passwordSetAt > ninetyDays);
   };
 
-  // Simulate sending email
   const sendEmail = (email) => {
     alert(`📧 Simulated email sent to ${email}`);
   };
 
   return (
-    <div style={{ margin: "20px" }}>
-      {/* QUICK LINKS HEADER */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2>👑 Admin Panel</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => window.location.assign("/accounts")} title="Open Chart of Accounts">Chart of Accounts</button>
-          <button onClick={() => window.location.assign("/event-logs")} title="Open Event Logs">Event Logs</button>
+    <div>
+      <NavBar userEmail={userEmail} selectedDate={selectedDate} onDateChange={setSelectedDate} />
+
+      <div style={{ margin: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2>👑 Admin Panel</h2>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => window.location.assign("/accounts")} title="Open Chart of Accounts">Chart of Accounts</button>
+            <button onClick={() => window.location.assign("/event-logs")} title="Open Event Logs">Event Logs</button>
+          </div>
         </div>
+
+        {/* Pending Requests */}
+        <h3>Pending Requests</h3>
+        {requests.length === 0 ? (
+          <p>No pending requests</p>
+        ) : (
+          <table border="1" cellPadding="8" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Username</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.firstName} {r.lastName}</td>
+                  <td>{r.email}</td>
+                  <td>{r.username || generateUsername(r.firstName, r.lastName)}</td>
+                  <td>
+                    <button onClick={() => approveRequest(r)}>Approve</button>
+                    <button onClick={() => rejectRequest(r.id)}>Reject</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* Existing Users */}
+        <h3>Users</h3>
+        {users.length === 0 ? (
+          <p>No users yet</p>
+        ) : (
+          <table border="1" cellPadding="8" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Suspend</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.username}</td>
+                  <td>{u.email}</td>
+                  <td>{u.role}</td>
+                  <td>{u.active ? "Active" : "Inactive"}</td>
+                  <td>
+                    <input
+                      type="date"
+                      onChange={(e) =>
+                        setSuspendDates({ ...suspendDates, [u.id]: { ...suspendDates[u.id], start: e.target.value } })
+                      }
+                    />
+                    <input
+                      type="date"
+                      onChange={(e) =>
+                        setSuspendDates({ ...suspendDates, [u.id]: { ...suspendDates[u.id], end: e.target.value } })
+                      }
+                    />
+                    <button onClick={() => suspendUser(u.id)}>Suspend</button>
+                  </td>
+                  <td>
+                    <button onClick={() => toggleActive(u.id, u.active)}>
+                      {u.active ? "Deactivate" : "Activate"}
+                    </button>
+                    <button onClick={() => sendEmail(u.email)}>Send Email</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* Expired Password Report */}
+        <h3>⚠️ Expired Passwords</h3>
+        {getExpiredUsers().length === 0 ? (
+          <p>No expired passwords</p>
+        ) : (
+          <ul>
+            {getExpiredUsers().map((u) => (
+              <li key={u.id}>
+                {u.username} ({u.email}) → expired
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-
-      {/* Pending Requests */}
-      <h3>Pending Requests</h3>
-      {requests.length === 0 ? (
-        <p>No pending requests</p>
-      ) : (
-        <table border="1" cellPadding="8" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Username</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((r) => (
-              <tr key={r.id}>
-                <td>{r.firstName} {r.lastName}</td>
-                <td>{r.email}</td>
-                <td>{r.username || generateUsername(r.firstName, r.lastName)}</td>
-                <td>
-                  <button onClick={() => approveRequest(r)}>Approve</button>
-                  <button onClick={() => rejectRequest(r.id)}>Reject</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Existing Users */}
-      <h3>Users</h3>
-      {users.length === 0 ? (
-        <p>No users yet</p>
-      ) : (
-        <table border="1" cellPadding="8" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th>Username</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th>Suspend</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>{u.username}</td>
-                <td>{u.email}</td>
-                <td>{u.role}</td>
-                <td>{u.active ? "Active" : "Inactive"}</td>
-                <td>
-                  <input
-                    type="date"
-                    onChange={(e) =>
-                      setSuspendDates({ ...suspendDates, [u.id]: { ...suspendDates[u.id], start: e.target.value } })
-                    }
-                  />
-                  <input
-                    type="date"
-                    onChange={(e) =>
-                      setSuspendDates({ ...suspendDates, [u.id]: { ...suspendDates[u.id], end: e.target.value } })
-                    }
-                  />
-                  <button onClick={() => suspendUser(u.id)}>Suspend</button>
-                </td>
-                <td>
-                  <button onClick={() => toggleActive(u.id, u.active)}>
-                    {u.active ? "Deactivate" : "Activate"}
-                  </button>
-                  <button onClick={() => sendEmail(u.email)}>Send Email</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Expired Password Report */}
-      <h3>⚠️ Expired Passwords</h3>
-      {getExpiredUsers().length === 0 ? (
-        <p>No expired passwords</p>
-      ) : (
-        <ul>
-          {getExpiredUsers().map((u) => (
-            <li key={u.id}>
-              {u.username} ({u.email}) → expired
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

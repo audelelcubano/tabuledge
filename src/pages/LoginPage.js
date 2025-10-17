@@ -1,132 +1,80 @@
 // src/pages/LoginPage.js
-import { useNavigate } from "react-router-dom";
 import React, { useState } from "react";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { useNavigate, Link } from "react-router-dom";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase";
+import NavBar from "../components/NavBar";
 
 function LoginPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
+  const [err, setErr] = useState("");
+
+  const [selectedDate, setSelectedDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setErr("");
     try {
-      // Look up user document in Firestore (users collection keyed by email)
-      const userDocRef = doc(db, "users", email);
-      const snap = await getDoc(userDocRef);
-
-      if (snap.exists()) {
-        const data = snap.data();
-
-        // Account lock check
-        if (data.failedAttempts >= 3) {
-          alert("❌ Account locked. Contact admin.");
-          return;
-        }
-
-        // Password expiration check (90 days, warn at 3 days)
-        const ninetyDays = 90 * 24 * 60 * 60 * 1000;
-        if (data.passwordSetAt) {
-          const age = Date.now() - data.passwordSetAt;
-          if (age > ninetyDays) {
-            alert("❌ Password expired. Please reset it.");
-            return;
-          } else if (age > ninetyDays - (3 * 24 * 60 * 60 * 1000)) {
-            alert("⚠️ Your password will expire in less than 3 days.");
-          }
-        }
-      }
-
-      // Firebase login attempt
       await signInWithEmailAndPassword(auth, email, password);
-
-      // Reset failed attempts
-      if (snap.exists()) {
-        await updateDoc(userDocRef, { failedAttempts: 0 });
-      }
-
-      alert("✅ Login successful!");
-
-      // Redirect based on role
-      if (snap.exists()) {
-        const role = snap.data().role;
-        if (role === "admin") {
-          navigate("/admin");
-        } else if (role === "manager") {
-          navigate("/manager");
-        } else if (role === "accountant") {
-          navigate("/accountant");
-        } else {
-          navigate("/"); // fallback
-        }
-      } else {
-        navigate("/"); // fallback if no Firestore record
-      }
-
-    } catch (err) {
-      setError(err.message);
-
-      // Increment failed attempts
-      const userDocRef = doc(db, "users", email);
-      const snap = await getDoc(userDocRef);
-      if (snap.exists()) {
-        const attempts = (snap.data().failedAttempts || 0) + 1;
-        await updateDoc(userDocRef, { failedAttempts: attempts });
-      }
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) {
-      alert("Please enter your email above first.");
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, email);
-      alert("📧 Password reset email sent!");
-    } catch (err) {
-      setError(err.message);
+      navigate("/accounts");
+    } catch (error) {
+      setErr(error.message);
     }
   };
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", marginTop: "100px" }}>
-      <form
-        onSubmit={handleLogin}
-        style={{ display: "flex", flexDirection: "column", width: "300px" }}
-      >
-        <h2>Tabuledge Login</h2>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button type="submit">Login</button>
-        {error && <p style={{ color: "red" }}>{error}</p>}
+    <div>
+      <NavBar
+        userEmail=""
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+        showNav={false}
+        showLogout={false}
+      />
 
-        <button type="button" onClick={handleForgotPassword}>
-          Forgot Password
-        </button>
-
-        <button type="button" onClick={() => navigate("/register")}>
-          Create New User
-        </button>
-      </form>
+      <main style={styles.container}>
+        <h2>Sign in</h2>
+        <form onSubmit={handleLogin} style={styles.form}>
+          <input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            required
+          />
+          <input
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            required
+          />
+          {err && <div style={styles.error}>{err}</div>}
+          <button type="submit">Login</button>
+        </form>
+        <p style={{ marginTop: 10 }}>
+          No account? <Link to="/register">Register</Link>
+        </p>
+      </main>
     </div>
   );
 }
 
-export default LoginPage;
+const styles = {
+  container: { padding: 20, maxWidth: 420, margin: "20px auto" },
+  form: {
+    display: "grid",
+    gap: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 12,
+    padding: 16,
+  },
+  error: { color: "#b91c1c" },
+};
 
+export default LoginPage;
