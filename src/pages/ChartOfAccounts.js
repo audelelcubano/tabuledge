@@ -14,10 +14,10 @@ import {
 } from "firebase/firestore";
 import NavBar from "../components/NavBar";
 import HelpModal from "../components/HelpModal";
+import SendEmailModal from "../components/SendEmailModal";
 import { formatMoney, parseMoney } from "../utils/format";
 import { isDigitsOnly, hasCorrectPrefix } from "../utils/validation";
 import useUserRole from "../hooks/useUserRole";
-import SendEmailModal from "../components/SendEmailModal";
 
 function ChartOfAccounts() {
   const navigate = useNavigate();
@@ -30,10 +30,6 @@ function ChartOfAccounts() {
   );
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [emailAccountRef, setEmailAccountRef] = useState(null); // optional: include account context
-
-
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -44,7 +40,7 @@ function ChartOfAccounts() {
     if (!roleLoading) setShowForm(canManage);
   }, [roleLoading, canManage]);
 
-  // Active filter values (applied when user clicks button / presses Enter)
+  // Filters (applied)
   const [filters, setFilters] = useState({
     name: "",
     number: "",
@@ -54,8 +50,7 @@ function ChartOfAccounts() {
     maxAmount: "",
     activeOnly: true,
   });
-
-  // Draft values while the user is typing
+  // Filters (draft while typing)
   const [filterDraft, setFilterDraft] = useState({
     name: "",
     number: "",
@@ -66,7 +61,11 @@ function ChartOfAccounts() {
     activeOnly: true,
   });
 
-  // Add/Edit form state (admins)
+  // Email modal state
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState({ role: "", account: null });
+
+  // Add/Edit form state
   const emptyForm = {
     name: "",
     number: "",
@@ -90,11 +89,12 @@ function ChartOfAccounts() {
       const snap = await getDocs(collection(db, "accounts"));
       setAccounts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setLoading(false);
+      setFilterDraft((d) => ({ ...d, ...filters })); // sync once
     };
     load();
-  }, []);
+  }, []); // eslint-disable-line
 
-  // Apply filters to data
+  // Apply filters
   const filtered = useMemo(() => {
     return accounts
       .filter((a) => {
@@ -248,19 +248,27 @@ function ChartOfAccounts() {
   const goLedger = (acc) => navigate(`/ledger/${acc.id}`);
   const goDetails = (acc) => navigate(`/accounts/${acc.id}`);
 
-  // Row actions dropdown
+  // Row actions dropdown (extended with email + view logs)
   const onRowAction = (acc, value) => {
     if (!value) return;
-    if (value === "view") return goDetails(acc);
-    if (value === "edit") return startEdit(acc);
-    if (value === "deactivate") return deactivate(acc);
-    if (value === "email") {
-     setEmailAccountRef({ id: acc.id, name: acc.name, number: acc.number });
-     setEmailOpen(true);
+    switch (value) {
+      case "view":
+        return goDetails(acc);
+      case "edit":
+        return startEdit(acc);
+      case "deactivate":
+        return deactivate(acc);
+      case "viewLogs":
+        return navigate(`/event-logs?accountId=${encodeURIComponent(acc.id)}`);
+      case "emailManager":
+        setEmailTo({ role: "manager", account: acc }); setEmailOpen(true); return;
+      case "emailAccountant":
+        setEmailTo({ role: "accountant", account: acc }); setEmailOpen(true); return;
+      default:
+        return;
     }
   };
 
-  // Wait for role so the UI doesn't flicker
   if (roleLoading) return <div style={{ padding: 20 }}>Loading…</div>;
 
   return (
@@ -274,14 +282,12 @@ function ChartOfAccounts() {
       <main style={styles.container}>
         <h2 style={styles.h2}>Chart of Accounts</h2>
 
-        {/* View-only banner */}
         {!canManage && (
           <div style={styles.banner} title="You can view and search accounts only">
             View-only mode: your role (<strong>{role || "unknown"}</strong>) cannot add, edit, or deactivate accounts.
           </div>
         )}
 
-        {/* Top actions */}
         <div style={styles.actions}>
           {canManage && (
             <button
@@ -296,17 +302,6 @@ function ChartOfAccounts() {
           )}
           <button onClick={() => setHelpOpen(true)} title="Open help for this page" style={{ marginLeft: 8 }}>
             Help
-          </button>
-           {/* Allow any role to contact manager/admin from here */}
-          <button
-            onClick={() => {
-             setEmailAccountRef(null);
-             setEmailOpen(true);
-           }}
-           title="Send a message to your manager or administrator"
-            style={{ marginLeft: 8 }}
-         >
-            Contact Manager/Admin
           </button>
         </div>
 
@@ -540,7 +535,6 @@ function ChartOfAccounts() {
             Active only
           </label>
 
-          {/* Filter action button */}
           <button
             onClick={() => setFilters(filterDraft)}
             style={styles.applyBtn}
@@ -576,11 +570,7 @@ function ChartOfAccounts() {
                   <tr key={acc.id} style={{ opacity: acc.active === false ? 0.5 : 1 }}>
                     <td style={styles.td}>{acc.order}</td>
                     <td style={styles.td}>
-                      <button
-                        onClick={() => goLedger(acc)}
-                        style={styles.linkBtn}
-                        title="Open ledger for this account"
-                      >
+                      <button onClick={() => goLedger(acc)} style={styles.linkBtn} title="Open ledger for this account">
                         {acc.name}
                       </button>
                     </td>
@@ -588,9 +578,7 @@ function ChartOfAccounts() {
                     <td style={styles.td}>{acc.category}</td>
                     <td style={styles.td}>{acc.subcategory}</td>
                     <td style={styles.td}>{acc.normalSide}</td>
-                    <td style={{ ...styles.td, textAlign: "right" }}>
-                      {formatMoney(acc.balance)}
-                    </td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>{formatMoney(acc.balance)}</td>
                     <td style={styles.td}>{acc.active === false ? "Inactive" : "Active"}</td>
                     <td style={styles.td}>
                       <select
@@ -606,7 +594,9 @@ function ChartOfAccounts() {
                         <option value="view">View</option>
                         <option value="edit" disabled={!canManage}>Edit</option>
                         <option value="deactivate" disabled={!canManage}>Deactivate</option>
-                        <option value="email">Email Manager/Admin</option>
+                        <option value="viewLogs">View Logs</option>
+                        <option value="emailManager">Email Manager</option>
+                        <option value="emailAccountant">Email Accountant</option>
                       </select>
                     </td>
                   </tr>
@@ -619,26 +609,19 @@ function ChartOfAccounts() {
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
 
-          <SendEmailModal
-            open={emailOpen}
-            onClose={() => setEmailOpen(false)}
-            onSend={async ({ toRole, subject, body }) => {
-            const from = userEmail || fallbackEmail;
-            const payload = {
-               from,
-               toRole, // "manager" | "admin"
-               subject,
-               body,
-               relatedAccount: emailAccountRef
-                  ? { id: emailAccountRef.id, name: emailAccountRef.name, number: emailAccountRef.number }
-                  : null,
-               createdAt: serverTimestamp(),
-            };
-            await addDoc(collection(db, "messages"), payload);
-            setEmailOpen(false);
-            alert("Message sent.");
-          }}
-        />
+      {/* Single email modal for the page */}
+      <SendEmailModal
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
+        defaultSubject={
+          emailTo.account ? `Account: ${emailTo.account.name} (${emailTo.account.number})` : ""
+        }
+        defaultMessage={
+          emailTo.account
+            ? `Hi ${emailTo.role},\n\nPlease review the account "${emailTo.account.name}" (#${emailTo.account.number}).\n\nThanks!`
+            : ""
+        }
+      />
     </div>
   );
 }
