@@ -1,70 +1,79 @@
-# Getting Started with Create React App
+📊 Tabuledge
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A web-based accounting and finance application built for SWE 4713 – Software Application Domain.
+This repo contains the Sprint 1 deliverables: authentication system, role separation, and admin user management.
 
-## Available Scripts
+🚀 Features Implemented (Sprint 1)
 
-In the project directory, you can run:
+Authentication
 
-### `npm start`
+Login with email & password (Firebase Auth)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Forgot password (reset email via Firebase)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Lock account after 3 failed login attempts
 
-### `npm test`
+Password expiration warning (90 days, alerts 3 days before)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Password Rules
 
-### `npm run build`
+Minimum 8 characters
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Must include a letter, a number, and a special character
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Must start with a letter
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Checked live using react-password-checklist
 
-### `npm run eject`
+User Management
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Create New User request form (first name, last name, address, DOB, email, password)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Auto-generated usernames → first initial + lastname + MMYY (e.g., jdoe0925)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Requests stored in Firestore under userRequests
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Admin Panel:
 
-## Learn More
+View all pending requests
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Approve request → promote to users collection
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Reject request
 
-### Code Splitting
+View existing users with role & status
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+Activate/deactivate users
 
-### Analyzing the Bundle Size
+Role Separation
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Dashboards created for:
 
-### Making a Progressive Web App
+👑 Admin (/admin)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+📊 Manager (/manager)
 
-### Advanced Configuration
+💼 Accountant (/accountant)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+🛠️ Tech Stack
 
-### Deployment
+Frontend: React (via Create React App)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Backend / Auth / DB: Firebase Authentication + Firestore
 
-### `npm run build` fails to minify
+UI Libraries: React Router, Material UI (planned), React Password Checklist
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Hosting: Netlify (planned for deployment)
+
+⚙️ Setup Instructions
+
+Clone the repository and install dependencies:
+
+git clone https://github.com/audelelcubano/tabuledge.git
+cd tabuledge
+npm install
+npm start
+
+
+This will launch the dev server at http://localhost:3000/.
+
